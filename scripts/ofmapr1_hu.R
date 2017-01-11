@@ -16,7 +16,6 @@ interc.9000 <- 0
 
 # format
 excel <- 0
-plotly <- 1
 plot.ann.est <- 1
 plot.ann.chg <- 1
 
@@ -146,7 +145,7 @@ if (all == 1){
 
 ## Plots--------------------------------------------
 # plot annual county estimates as stacked bar chart
-if (plotly == 1 & plot.ann.est == 1){ 
+if (plot.ann.est == 1){ 
   # transform table
   select.yrcols.ind <-grep(paste0("yr"),names(table))
   ptable <- NULL
@@ -174,7 +173,7 @@ if (plotly == 1 & plot.ann.est == 1){
 }
 
 # plot annual change by county (subplot)
-if (plotly == 1 & plot.ann.chg == 1){ 
+if (plot.ann.chg == 1){ 
   # transform table
   ann.change.table <- ann.change(table) %>% as.data.frame()
   select.yrcols.ind <-grep(paste0("D"),names(ann.change.table))
