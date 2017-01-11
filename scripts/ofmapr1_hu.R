@@ -8,27 +8,33 @@ library(stringr)
 library(RColorBrewer)
 
 ## user inputs--------------------------------
+# time period
 all <- 1
 present <- 0
 interc.0010 <- 0
 interc.9000 <- 0
 
+# format
+excel <- 0
 plotly <- 1
 plot.ann.est <- 1
+plot.ann.chg <- 1
 
-outdir <- "J:/Staff/Christy/OFM/2016/"
+# directory and files
+indir <- "J:/Staff/Christy/OFM/2016/"
+outdir <- "C:/Users/Christy/Desktop/ofm/results"
 my.filename <- "ofm_housing_2010_present_cps.xlsx"
 
 # read data files 
-ofmApr1.present.file <- "J:/Staff/Christy/OFM/2016/ofm_april1_housing.xlsx"
-ofmApr1.00.10.file <- "J:/Staff/Christy/OFM/2016/ofm_april1_intercensal_estimates_2000-2010.xlsx"
-ofmApr1.90.00.file <- "J:/Staff/Christy/OFM/2016/ofm_april1_intercensal_estimates_1990-2000.xlsx"
+ofmApr1.present.file <- file.path(indir, "ofm_april1_housing.xlsx")
+ofmApr1.00.10.file <- file.path(indir, "ofm_april1_intercensal_estimates_2000-2010.xlsx")
+ofmApr1.90.00.file <- file.path(indir, "ofm_april1_intercensal_estimates_1990-2000.xlsx")
 
-county <- c("King", "Kitsap", "Pierce", "Snohomish")
 present.yr <- 2016
 present.years <- seq(2010, present.yr)
 inter.years2 <- seq(2000, 2010)
 inter.years1 <- seq(1990, 2000)
+county <- c("King", "Kitsap", "Pierce", "Snohomish")
 
 ## functions--------------------------------
 # function to make sequence of years grep ready
@@ -108,28 +114,28 @@ if (all == 1){
   table <- merge(t1, t2, by = c("Filter", "County.Name", "Jurisdiction"))
   table <- table[,c(1:ncol(table)-1)]
   table <- merge(table, t3, by.x = c("Filter", "County.Name", "Jurisdiction"), by.y = c("Filter", "County", "Jurisdiction"))
-  
-  # write table to workbook
-  wb <- createWorkbook(paste0(outdir, my.filename))
-  addWorksheet(wb, "annual estimates")
-  writeData(wb, sheet = "annual estimates", x = table, colNames = TRUE)
-  print("exported annual estimates")
-  
-  #write reg.table to workbook
-  reg.table <- region.total(table)
-  append.worksheet(reg.table, wb, "reg annual estimates")
-  print("exported regional annual estimates")
-  
-  # write annual change to workbook
-  ann.change.table <- ann.change(table)
-  append.worksheet(ann.change.table, wb, "annual change")
-  print("exported annual change estimates")
-  
-  #write reg.ann.table to workbook
-  reg.ann.change.table <- region.total(ann.change.table)
-  append.worksheet(reg.ann.change.table, wb, "reg annual change")
-  print("exported regional annual change estimates")
-  
+  if (excel == 1){
+    # write table to workbook
+    wb <- createWorkbook(paste0(outdir, my.filename))
+    addWorksheet(wb, "annual estimates")
+    writeData(wb, sheet = "annual estimates", x = table, colNames = TRUE)
+    print("exported annual estimates")
+    
+    #write reg.table to workbook
+    reg.table <- region.total(table)
+    append.worksheet(reg.table, wb, "reg annual estimates")
+    print("exported regional annual estimates")
+    
+    # write annual change to workbook
+    ann.change.table <- ann.change(table)
+    append.worksheet(ann.change.table, wb, "annual change")
+    print("exported annual change estimates")
+    
+    #write reg.ann.table to workbook
+    reg.ann.change.table <- region.total(ann.change.table)
+    append.worksheet(reg.ann.change.table, wb, "reg annual change")
+    print("exported regional annual change estimates")
+  }
 } else if (present == 1){
   table <- ofm_april1_present(ofmApr1.present.file, present.years)
 } else if (interc.0010 == 1){
@@ -140,8 +146,7 @@ if (all == 1){
 
 ## Plots--------------------------------------------
 # plot annual county estimates as stacked bar chart
-if (plotly == 1 & plot.ann.est == 1){
-  
+if (plotly == 1 & plot.ann.est == 1){ 
   # transform table
   select.yrcols.ind <-grep(paste0("yr"),names(table))
   ptable <- NULL
@@ -158,11 +163,61 @@ if (plotly == 1 & plot.ann.est == 1){
                x = ~year,
                y = ~estimate,
                color = ~County.Name,
-               colors = "Paired",
+               colors = c("#377eb8", "#ff7f00", "#4daf4a", "#e41a1c"),
                type = 'bar'
   )%>%
-    layout(font = list(family="Segoe UI", size = 12.5),
+    layout(title = "OFM Total Housing Unit Estimate",
+           font = list(family="Segoe UI", size = 12.5),
            barmode = 'stack')
+  
+  print(p) 
+}
+
+# plot annual change by county (subplot)
+if (plotly == 1 & plot.ann.chg == 1){ 
+  # transform table
+  ann.change.table <- ann.change(table) %>% as.data.frame()
+  select.yrcols.ind <-grep(paste0("D"),names(ann.change.table))
+  ptable <- NULL
+  for (i in 1:length(select.yrcols.ind)){
+    t <- NULL
+    t <- ann.change.table[,c(1:3, select.yrcols.ind[i])] 
+    t$year <- str_match(tail(colnames(t), 1), "(\\d+):yr(\\d+)")[,1]
+    t$year <- gsub(":yr", "-", t$year)
+    colnames(t)[ncol(t)-1] <- "estimate"
+    ifelse(is.null(ptable), ptable <- t, ptable <- rbind(ptable, t))
+  }
+  
+  ptable$id <- as.integer(factor(ptable$County.Name))
+  # plot table
+  one_plot <- function(dat){
+    plot_ly(dat,
+            x = ~year,
+            y = ~estimate,
+            split = ~County.Name,
+            type = 'bar')
+  }
+  
+  # plot
+  p <- ptable %>%
+    group_by(County.Name) %>%
+    do(p = one_plot(.)) %>%
+    subplot(nrows = 2) %>%
+    layout(xaxis = list(domain = c(0, .45), showgrid=TRUE),
+           yaxis = list(domain = c(.55, 1)),
+           
+           xaxis2 = list(domain = c(.55, 1), showgrid=TRUE),
+           yaxis2 = list(domain = c(.55, 1)),
+           
+           xaxis3 = list(domain = c(0, .45), showgrid=TRUE),
+           yaxis3 = list(domain = c(0, .45)),
+           
+           xaxis4 = list(domain = c(.55, 1), showgrid=TRUE),
+           yaxis4 = list(domain = c(0, .45)),
+           
+           title = "OFM Housing Unit Growth",
+           font = list(family="Segoe UI", size = 11),
+           margin = list(l=100, b=50, t=50, r=100))
   
   print(p) 
 }
